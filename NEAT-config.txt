@@ -1,14 +1,14 @@
 
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 1000
+fitness_threshold     = 100
 pop_size              = 10
 reset_on_extinction   = False
 
 [DefaultGenome]
 # node activation options
 activation_default      = tanh
-activation_mutate_rate  = 0.2
+activation_mutate_rate  = 0.05
 activation_options      = tanh
 
 # node aggregation options

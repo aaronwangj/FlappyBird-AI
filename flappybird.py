@@ -7,6 +7,8 @@ pygame.font.init()
 
 WIN_WIDTH = 500
 WIN_HEIGHT = 700
+GEN = 0
+BEST = 0
 
 BIRD_IMG = [pygame.transform.scale2x(pygame.image.load(os.path.join("img", "b1.png"))),
 pygame.transform.scale2x(pygame.image.load(os.path.join("img", "b2.png"))),
@@ -15,7 +17,7 @@ BG_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("img", "backgro
 BASE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("img", "ground.png")))
 PIPE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("img", "pipe.png")))
 
-STAT_FONT = pygame.font.SysFont("comicsans", 50)
+STAT_FONT = pygame.font.SysFont("comicsans", 40)
 
 class Bird:
     IMGS = BIRD_IMG
@@ -87,8 +89,8 @@ class Bird:
 
 
 class Pipe:
-    GAP = 200
-    VEL = 5
+    GAP = 195
+    VEL = 6
 
     def __init__(self,x):
         self.x = x
@@ -131,7 +133,7 @@ class Pipe:
         return False
 
 class Base:
-    VEL = 5
+    VEL = 6
     WIDTH = BASE_IMG.get_width()
     IMG = BASE_IMG
 
@@ -155,14 +157,23 @@ class Base:
         win.blit(self.IMG, (self.x2, self.y))
 
 
-def draw_window(win, birds, pipes, base, score):
+def draw_window(win, birds, pipes, base, score, gen, best):
     win.blit(BG_IMG, (0,-125))
 
     for pipe in pipes:
         pipe.draw(win)
 
-    text = STAT_FONT.render("Score: " + str(score), 1, (255, 255, 255))
-    win.blit(text, (WIN_WIDTH-10-text.get_width(), 10))
+    gen_text = STAT_FONT.render("Generation: " + str(gen), 1, (255, 255, 255))
+    win.blit(gen_text, (10, 10))
+
+    num_text = STAT_FONT.render("Birds: " + str(len(birds)), 1, (255, 255, 255))
+    win.blit(num_text, (10, 45))
+
+    score_text = STAT_FONT.render("Score: " + str(score), 1, (255, 255, 255))
+    win.blit(score_text, (WIN_WIDTH - score_text.get_width() - 15, 45))
+
+    best_text = STAT_FONT.render("Best: " + str(best), 1, (255, 255, 255))
+    win.blit(best_text, (WIN_WIDTH - best_text.get_width() - 15, 10))
 
     base.draw(win)
 
@@ -171,10 +182,16 @@ def draw_window(win, birds, pipes, base, score):
     
     pygame.display.update()
 
-def main(genomes, config):
+def eval_gen(genomes, config):
+
+    score = 0
     nets = []
     ge = []
     birds = []
+    global GEN
+    GEN += 1
+    global BEST
+
 
     for genome_id, g in genomes:
         net = neat.nn.FeedForwardNetwork.create(g, config)
@@ -187,8 +204,6 @@ def main(genomes, config):
     pipes = [Pipe(600)]
     win = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
     clock = pygame.time.Clock()
-
-    score = 0
 
     run = True
     while run:
@@ -210,11 +225,11 @@ def main(genomes, config):
 
         for x, bird in enumerate(birds):
             bird.move()
-            ge[x].fitness += .1
+            ge[x].fitness += .15
 
             output = nets[x].activate((bird.y, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
 
-            if output[0] > 0:
+            if output[0] > 0.75:
                 bird.jump()
 
         #bird.move()
@@ -223,7 +238,7 @@ def main(genomes, config):
         for pipe in pipes:
             for x, bird in enumerate(birds):
                 if pipe.collide(bird):
-                    ge[x].fitness-=1
+                    ge[x].fitness-=.1
                     birds.pop(x)
                     ge.pop(x)
                     nets.pop(x)
@@ -239,7 +254,10 @@ def main(genomes, config):
             pipe.move()
 
         if add_pipe:
-            score +=1
+            score += 1
+            if score > BEST:
+                BEST +=1
+
             for g in ge:
                 g.fitness += 3
 
@@ -259,7 +277,7 @@ def main(genomes, config):
 
 
         base.move()        
-        draw_window(win,birds, pipes, base, score)
+        draw_window(win,birds, pipes, base, score, GEN, BEST)
 
 
 def run(config_path):
@@ -271,7 +289,7 @@ def run(config_path):
     stats = neat.StatisticsReporter()
     pop.add_reporter(stats)
 
-    winner = pop.run(main, 50)
+    winner = pop.run(eval_gen, 50)
 
 if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
