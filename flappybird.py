@@ -19,6 +19,7 @@ WIN_HEIGHT = 700
 WIN_WIDTH = 500
 GEN = 0
 BEST = 0
+#images and fonts
 BIRD_IMG = [pygame.transform.scale2x(pygame.image.load(os.path.join("img", "b1.png"))),
 pygame.transform.scale2x(pygame.image.load(os.path.join("img", "b2.png"))),
 pygame.transform.scale2x(pygame.image.load(os.path.join("img", "b3.png")))]
@@ -26,6 +27,10 @@ BG_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("img", "backgro
 BASE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("img", "ground.png")))
 PIPE_IMG = pygame.transform.scale2x(pygame.image.load(os.path.join("img", "pipe.png")))
 STAT_FONT = pygame.font.SysFont("comicsans", 40)
+#window customization
+WIN = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
+pygame.display.set_caption("Flappy Bird AI")
+pygame.display.set_icon(BIRD_IMG[0])
 
 #Bird class representing bird avatar
 class Bird:
@@ -60,15 +65,12 @@ class Bird:
 
         #gravity acceleration calculation
         d = self.vel*self.tick_count+1.5*self.tick_count**2
-
         #terminal velocity
         if d>=16:
             d = 16
         if d<0:
             d-=2
-
         self.y = self.y + d
-
         #tilt bird upwards
         if d<0 or self.y < self.height + 50:
             if self.tilt < self.MAX_ROT:
@@ -112,7 +114,6 @@ class Bird:
         if self.tilt <= -80:
             self.img = self.IMG[1]
             self.img_count = self.ANI_TIME*2
-
         #rotates and blits to window
         rot_image = pygame.transform.rotate(self.img, self.tilt)
         new_rect = rot_image.get_rect(center=self.img.get_rect(topleft = (self.x, self.y)).center)
@@ -188,7 +189,6 @@ class Pipe:
 
         if t_point or b_point:
             return True
-
         return False
 
 """
@@ -216,10 +216,8 @@ class Base:
     def move(self):
         self.x1 -= self.VEL
         self.x2 -= self.VEL
-
         if self.x1 + self.WIDTH < 0:
             self.x1 = self.x2 + self.WIDTH
-        
         if self.x2 + self.WIDTH < 0:
             self.x2 = self.x1 + self.WIDTH
 
@@ -242,11 +240,27 @@ gen: current generation
 best: best score
 return: none
 """
-def draw_window(win, birds, pipes, base, score, gen, best):
+def draw_window(win, birds, pipes, closest_pipe, base, score, gen, best):
+    
+    #background image
     win.blit(BG_IMG, (0,-125))
 
     for pipe in pipes:
+        #draws pipes
         pipe.draw(win)
+
+    #overlay base over pipes
+    base.draw(win)
+
+    for bird in birds:
+        #draws antialiased line from bird to nearest pipe
+        try:
+            pygame.draw.aaline(win, (255,0,0), (bird.x+bird.img.get_width()/2, bird.y + bird.img.get_height()/2), (pipes[closest_pipe].x + pipes[closest_pipe].PIPE_TOP.get_width()/2, pipes[closest_pipe].height))
+            pygame.draw.aaline(win, (255,0,0), (bird.x+bird.img.get_width()/2, bird.y + bird.img.get_height()/2), (pipes[closest_pipe].x + pipes[closest_pipe].PIPE_BOTTOM.get_width()/2, pipes[closest_pipe].bottom))
+        except:
+             pass
+        # draws bird
+        bird.draw(win)
 
     #Generation text
     gen_text = STAT_FONT.render("Generation: " + str(gen), 1, (255, 255, 255))
@@ -263,11 +277,6 @@ def draw_window(win, birds, pipes, base, score, gen, best):
     #Best score text
     best_text = STAT_FONT.render("Best: " + str(best), 1, (255, 255, 255))
     win.blit(best_text, (WIN_WIDTH - best_text.get_width() - 15, 10))
-
-    base.draw(win)
-
-    for bird in birds:
-        bird.draw(win)
     
     #periodically updates pygame display (animation)
     pygame.display.update()
@@ -279,22 +288,18 @@ farther the bird, greater fitness, higher reproduction
 return: none
 """
 def eval_gen(genomes, config):
-
+    #initial score
     score = 0
-
     #list of birds
     birds = []
-
     #list of each bird's genomes
     ge = []
-
     #list of neural nets assigned to each genome
     nets = []
 
     global GEN
     GEN += 1
     global BEST
-
 
     for _, g in genomes:
         net = neat.nn.FeedForwardNetwork.create(g, config)
@@ -318,12 +323,12 @@ def eval_gen(genomes, config):
                 break
         
         #index of closest pipe
-        pipe_ind = 0
+        closest_pipe = 0
         
         #check to see which pipe to use for neural net input
         if len(birds) > 0:
             if len(pipes) > 1 and birds[0].x > pipes[0].x + pipes[0].PIPE_TOP.get_width():
-                pipe_ind = 1
+                closest_pipe = 1
         else:
             run = False
             break
@@ -332,15 +337,12 @@ def eval_gen(genomes, config):
         for x, bird in enumerate(birds):
             bird.move()
             ge[x].fitness += .15
-
-            #given bird and pipes location, return confidence level on whether or not to jump
-            output = nets[x].activate((bird.y, abs(bird.y - pipes[pipe_ind].height), abs(bird.y - pipes[pipe_ind].bottom)))
-
+            #given bird and pipes location, returns confidence of jumping
+            output = nets[x].activate((bird.y, abs(bird.y - pipes[closest_pipe].height), abs(bird.y - pipes[closest_pipe].bottom)))
             #hyperbolic tangent activation function outputs -1 to 1
             #if reasonably confident (>0.5), have bird jump
             if output[0] > 0.5:
                 bird.jump()
-
         add_pipe = False
         rem = []
         for pipe in pipes:
@@ -351,17 +353,12 @@ def eval_gen(genomes, config):
                     birds.pop(x)
                     ge.pop(x)
                     nets.pop(x)
-
-
                 if not pipe.passed and pipe.x < bird.x:
                     pipe.passed = True
                     add_pipe = True
-            
             if pipe.x + pipe.PIPE_TOP.get_width() < 0:
                 rem.append(pipe)
-            
             pipe.move()
-
         if add_pipe:
             #increments score
             score += 1
@@ -376,14 +373,13 @@ def eval_gen(genomes, config):
         #removes old pipe
         for r in rem:
             pipes.remove(r)
-
         for x, bird in enumerate(birds):
             if bird.y + bird.img.get_height() >= 640 or bird.y < 0:
                 birds.pop(x)
                 ge.pop(x)
                 nets.pop(x)
         base.move()        
-        draw_window(win,birds, pipes, base, score, GEN, BEST)
+        draw_window(win,birds, pipes, closest_pipe, base, score, GEN, BEST)
 
 """
 Runs NEAT algorithm
