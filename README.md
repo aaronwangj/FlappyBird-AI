@@ -9,7 +9,7 @@ In short, the algorithm mimics Darwin's natural selection by assigning fitness s
 The AI will usually find an optimal neural network within five generations, but may take up to ten and as little as three generations.
 
 ## Requirements
-Pygame, NEAT, and Python 3.7.
+Pygame 1.9.6, NEAT 0.92, Python 3.8.3
 
 ## Instructions
 Download the files, run flappybird.py, and watch the AI train itself to conquer Flappy Bird. Enjoy!
